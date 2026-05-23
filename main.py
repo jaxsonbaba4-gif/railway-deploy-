@@ -1,10 +1,4 @@
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Document
-)
-
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -17,148 +11,135 @@ import requests
 import os
 import time
 
-# ==========================================
+# ======================================
 # CONFIG
-# ==========================================
+# ======================================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 API_URL = "https://api-of-naone-1.onrender.com/bot/check"
 
-# ==========================================
+# ======================================
+# FILTER WORDS
+# ======================================
+
+approved_keywords = [
+    "APPROVED",
+    "SUCCESS",
+    "LIVE",
+    "VALID",
+    "PASS"
+]
+
+declined_keywords = [
+    "DECLINED",
+    "FAILED",
+    "INVALID",
+    "DEAD",
+    "ERROR"
+]
+
+# ======================================
 # START COMMAND
-# ==========================================
+# ======================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "🔥 ONLINE",
-                callback_data="online"
-            ),
-
-            InlineKeyboardButton(
-                "⚡ READY",
-                callback_data="ready"
-            )
-        ]
-    ]
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     text = """
-╔════════════════════╗
-      ⚡ PREMIUM API BOT
-╚════════════════════╝
+╔══════════════════╗
+      ⚡ API BOT
+╚══════════════════╝
 
 📂 Send TXT File
 📝 Or Send Single Line
 
-⚡ Optimized Logic
-🔥 Real Counting
-✅ No Fake Declines
+🔥 Railway Hosted
 """
 
-    await update.message.reply_text(
-        text,
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text(text)
 
-# ==========================================
+# ======================================
 # SINGLE CHECK
-# ==========================================
+# ======================================
 
 async def single_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text.strip()
+    line = update.message.text.strip()
 
     msg = await update.message.reply_text(
-        "⚡ Processing..."
+        "⚡ Checking..."
     )
 
     try:
 
-        params = {
-            "card": text,
-            "gate": "pp"
-        }
+        start = time.time()
 
         r = requests.get(
             API_URL,
-            params=params,
+            params={
+                "card": line,
+                "gate": "pp"
+            },
             timeout=40
         )
 
-        data = r.json()
-
-        status = str(
-            data.get("status", "UNKNOWN")
+        end = round(
+            time.time() - start,
+            2
         )
 
-        response_text = str(
-            data.get("response", "NONE")
-        )
+        raw = r.text.strip()
 
-        brand = str(
-            data.get("brand", "UNKNOWN")
-        )
+        raw_upper = raw.upper()
 
-        gate = str(
-            data.get("gate", "pp")
-        )
+        result = "⚠ UNKNOWN"
 
-        taken = str(
-            data.get("time", "0")
-        )
+        if any(
+            x in raw_upper
+            for x in approved_keywords
+        ):
 
-        result = f"""
-╔════════════════╗
-      ⚡ RESULT
-╚════════════════╝
+            result = "✅ APPROVED"
 
-💳 {text}
+        elif any(
+            x in raw_upper
+            for x in declined_keywords
+        ):
 
-📌 Status:
-{status}
+            result = "❌ DECLINED"
 
-🏦 Brand:
-{brand}
+        text = f"""
+{result}
 
-⚡ Gate:
-{gate}
-
-📨 Response:
-{response_text}
+💳 {line}
 
 ⏱ Time:
-{taken}s
+{end}s
+
+📨 Raw:
+{raw}
 """
 
-        await msg.edit_text(result)
+        await msg.edit_text(text)
 
     except Exception as e:
 
         await msg.edit_text(
-            f"""
-❌ ERROR
-
-{e}
-"""
+            f"❌ ERROR\n\n{e}"
         )
 
-# ==========================================
+# ======================================
 # TXT CHECKER
-# ==========================================
+# ======================================
 
 async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    document: Document = update.message.document
+    document = update.message.document
 
     if not document.file_name.endswith(".txt"):
 
         await update.message.reply_text(
-            "❌ Send TXT file only."
+            "❌ TXT only"
         )
 
         return
@@ -192,9 +173,9 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     checked = 0
 
-    success = []
-    failed = []
-    errors = []
+    approved = []
+    declined = []
+    unknown = []
 
     session = requests.Session()
 
@@ -204,217 +185,200 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
 
-            params = {
-                "card": line,
-                "gate": "pp"
-            }
+            print(f"\nCHECKING -> {line}")
+
+            start = time.time()
 
             r = session.get(
                 API_URL,
-                params=params,
+                params={
+                    "card": line,
+                    "gate": "pp"
+                },
                 timeout=40
             )
 
-            data = r.json()
+            end = round(
+                time.time() - start,
+                2
+            )
+
+            raw = r.text.strip()
+
+            print("\nRAW RESPONSE:")
+            print(raw)
+
+            # ======================================
+            # VERIFY RESPONSE
+            # ======================================
+
+            if not raw:
+                continue
+
+            if len(raw) < 5:
+                continue
+
+            valid_words = [
+                "STATUS",
+                "RESPONSE",
+                "OK",
+                "ERROR",
+                "DECLINED",
+                "APPROVED"
+            ]
+
+            verified = any(
+                x in raw.upper()
+                for x in valid_words
+            )
+
+            if not verified:
+
+                print("\n⚠ UNVERIFIED")
+                continue
 
             checked += 1
 
-            status = str(
-                data.get("status", "UNKNOWN")
-            ).upper()
+            raw_upper = raw.upper()
 
-            response_text = str(
-                data.get("response", "NONE")
-            ).upper()
+            # ======================================
+            # FILTER
+            # ======================================
 
-            combined = (
-                status + " " + response_text
-            )
+            if any(
+                x in raw_upper
+                for x in approved_keywords
+            ):
 
-            positive_keywords = [
-                "APPROVED",
-                "LIVE",
-                "SUCCESS",
-                "VALID",
-                "PASS"
-            ]
+                approved.append(line)
 
-            is_success = any(
-                word in combined
-                for word in positive_keywords
-            )
+                print("\n✅ APPROVED")
 
-            if is_success:
+            elif any(
+                x in raw_upper
+                for x in declined_keywords
+            ):
 
-                success.append(
-                    f"{line} | {status}"
-                )
+                declined.append(line)
+
+                print("\n❌ DECLINED")
 
             else:
 
-                failed.append(
-                    f"{line} | {status}"
-                )
+                unknown.append(line)
 
-        except Exception as e:
+                print("\n⚠ UNKNOWN")
 
-            errors.append(
-                f"{line} -> {e}"
-            )
+            print(f"\n⏱ {end}s")
 
-            continue
+            # ======================================
+            # LIVE SAVE
+            # ======================================
 
-        # ==========================
-        # LIVE UPDATE
-        # ==========================
+            with open("approved.txt", "w") as f:
+                f.write("\n".join(approved))
 
-        if checked % 3 == 0:
+            with open("declined.txt", "w") as f:
+                f.write("\n".join(declined))
 
-            await status_msg.edit_text(
-                f"""
-⚡ PROCESSING FILE...
+            with open("unknown.txt", "w") as f:
+                f.write("\n".join(unknown))
+
+            # ======================================
+            # LIVE TELEGRAM UPDATE
+            # ======================================
+
+            if checked % 3 == 0:
+
+                await status_msg.edit_text(
+                    f"""
+⚡ PROCESSING
 
 📄 Total:
 {total}
 
-✅ Success:
-{len(success)}
+✅ Approved:
+{len(approved)}
 
-❌ Failed:
-{len(failed)}
+❌ Declined:
+{len(declined)}
 
-⚠ Errors:
-{len(errors)}
+⚠ Unknown:
+{len(unknown)}
 
 🔄 Checked:
 {checked}/{total}
 """
-            )
+                )
 
-    # ==========================================
-    # SAVE FILES
-    # ==========================================
+        except Exception as e:
 
-    with open(
-        "success.txt",
-        "w",
-        encoding="utf-8"
-    ) as f:
+            print("\nERROR:")
+            print(e)
 
-        f.write("\n".join(success))
+    # ======================================
+    # FINAL
+    # ======================================
 
-    with open(
-        "failed.txt",
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        f.write("\n".join(failed))
-
-    with open(
-        "errors.txt",
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        f.write("\n".join(errors))
-
-    end_time = round(
+    total_time = round(
         time.time() - start_time,
         2
     )
 
     final_text = f"""
 ╔══════════════════╗
-     ⚡ COMPLETED
+      ⚡ COMPLETED
 ╚══════════════════╝
 
 📄 Total:
 {total}
 
-✅ Success:
-{len(success)}
+✅ Approved:
+{len(approved)}
 
-❌ Failed:
-{len(failed)}
+❌ Declined:
+{len(declined)}
 
-⚠ Errors:
-{len(errors)}
+⚠ Unknown:
+{len(unknown)}
 
 🔄 Checked:
 {checked}/{total}
 
 ⏱ Time:
-{end_time}s
+{total_time}s
 """
 
-    await status_msg.edit_text(
-        final_text
-    )
+    await status_msg.edit_text(final_text)
 
-    # ==========================================
+    # ======================================
     # SEND FILES
-    # ==========================================
+    # ======================================
 
-    if success:
-
-        await update.message.reply_document(
-            document=open(
-                "success.txt",
-                "rb"
-            ),
-
-            filename="success.txt",
-
-            caption="✅ Success Results"
-        )
-
-    if failed:
+    if approved:
 
         await update.message.reply_document(
-            document=open(
-                "failed.txt",
-                "rb"
-            ),
-
-            filename="failed.txt",
-
-            caption="❌ Failed Results"
+            document=open("approved.txt", "rb"),
+            filename="approved.txt"
         )
 
-    if errors:
+    if declined:
 
         await update.message.reply_document(
-            document=open(
-                "errors.txt",
-                "rb"
-            ),
-
-            filename="errors.txt",
-
-            caption="⚠ Error Logs"
+            document=open("declined.txt", "rb"),
+            filename="declined.txt"
         )
 
-    # ==========================================
-    # CLEANUP
-    # ==========================================
+    if unknown:
 
-    session.close()
+        await update.message.reply_document(
+            document=open("unknown.txt", "rb"),
+            filename="unknown.txt"
+        )
 
-    os.remove(path)
-
-    if os.path.exists("success.txt"):
-        os.remove("success.txt")
-
-    if os.path.exists("failed.txt"):
-        os.remove("failed.txt")
-
-    if os.path.exists("errors.txt"):
-        os.remove("errors.txt")
-
-# ==========================================
+# ======================================
 # MAIN
-# ==========================================
+# ======================================
 
 def main():
 
@@ -445,11 +409,11 @@ def main():
         )
     )
 
-    print("🔥 BOT RUNNING")
+    print("🔥 BOT RUNNING ON RAILWAY")
 
     app.run_polling()
 
-# ==========================================
+# ======================================
 
 if __name__ == "__main__":
     main()
