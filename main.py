@@ -1,3 +1,7 @@
+# ======================================
+# DEMO API BOT
+# ======================================
+
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -20,23 +24,22 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_URL = "https://api-of-naone-1.onrender.com/bot/check"
 
 # ======================================
-# FILTER WORDS
+# DEMO FILTER WORDS
 # ======================================
 
-approved_keywords = [
-    "APPROVED",
+success_keywords = [
     "SUCCESS",
-    "LIVE",
+    "DONE",
+    "OK",
     "VALID",
-    "PASS"
+    "APPROVED"
 ]
 
-declined_keywords = [
-    "DECLINED",
+error_keywords = [
+    "ERROR",
     "FAILED",
     "INVALID",
-    "DEAD",
-    "ERROR"
+    "DECLINED"
 ]
 
 # ======================================
@@ -46,28 +49,26 @@ declined_keywords = [
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = """
-╔══════════════════╗
-      ⚡ API BOT
-╚══════════════════╝
+⚡ DEMO API BOT
 
 📂 Send TXT File
-📝 Or Send Single Line
+📝 Or Send Single Input
 
-🔥 Railway Hosted
+🔥 Railway Ready
 """
 
     await update.message.reply_text(text)
 
 # ======================================
-# SINGLE CHECK
+# SINGLE INPUT
 # ======================================
 
-async def single_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def single_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     line = update.message.text.strip()
 
     msg = await update.message.reply_text(
-        "⚡ Checking..."
+        "⚡ Processing..."
     )
 
     try:
@@ -92,32 +93,30 @@ async def single_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         raw_upper = raw.upper()
 
-        result = "⚠ UNKNOWN"
+        category = "⚠ UNKNOWN"
 
         if any(
             x in raw_upper
-            for x in approved_keywords
+            for x in success_keywords
         ):
 
-            result = "✅ APPROVED"
+            category = "✅ SUCCESS"
 
         elif any(
             x in raw_upper
-            for x in declined_keywords
+            for x in error_keywords
         ):
 
-            result = "❌ DECLINED"
+            category = "❌ ERROR"
 
         text = f"""
-{result}
+{category}
 
-💳 {line}
-
-⏱ Time:
-{end}s
-
-📨 Raw:
+📨 RAW RESPONSE:
 {raw}
+
+⏱ TIME:
+{end}s
 """
 
         await msg.edit_text(text)
@@ -129,7 +128,7 @@ async def single_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # ======================================
-# TXT CHECKER
+# TXT FILE WORKFLOW
 # ======================================
 
 async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -156,6 +155,10 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await file.download_to_drive(path)
 
+    # ======================================
+    # LOAD FILE
+    # ======================================
+
     with open(
         path,
         "r",
@@ -173,135 +176,185 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     checked = 0
 
-    approved = []
-    declined = []
+    success = []
+    errors = []
     unknown = []
 
     session = requests.Session()
 
-    start_time = time.time()
+    start_all = time.time()
+
+    # ======================================
+    # MAIN LOOP
+    # ======================================
 
     for line in lines:
 
-        try:
+        print(f"\n⚡ PROCESSING -> {line}")
 
-            print(f"\nCHECKING -> {line}")
+        finished = False
 
-            start = time.time()
+        while not finished:
 
-            r = session.get(
-                API_URL,
-                params={
-                    "card": line,
-                    "gate": "pp"
-                },
-                timeout=40
-            )
+            try:
 
-            end = round(
-                time.time() - start,
-                2
-            )
+                start = time.time()
 
-            raw = r.text.strip()
+                r = session.get(
+                    API_URL,
+                    params={
+                        "card": line,
+                        "gate": "pp"
+                    },
+                    timeout=40
+                )
 
-            print("\nRAW RESPONSE:")
-            print(raw)
+                end = round(
+                    time.time() - start,
+                    2
+                )
 
-            # ======================================
-            # VERIFY RESPONSE
-            # ======================================
+                raw = r.text.strip()
 
-            if not raw:
-                continue
+                print("\nRAW:")
+                print(raw)
 
-            if len(raw) < 5:
-                continue
+                # ======================================
+                # EMPTY RESPONSE
+                # ======================================
 
-            valid_words = [
-                "STATUS",
-                "RESPONSE",
-                "OK",
-                "ERROR",
-                "DECLINED",
-                "APPROVED"
-            ]
+                if not raw:
 
-            verified = any(
-                x in raw.upper()
-                for x in valid_words
-            )
+                    print("⚠ EMPTY")
 
-            if not verified:
+                    time.sleep(2)
 
-                print("\n⚠ UNVERIFIED")
-                continue
+                    continue
 
-            checked += 1
+                # ======================================
+                # VERIFY FINAL RESPONSE
+                # ======================================
 
-            raw_upper = raw.upper()
+                final_words = [
+                    "SUCCESS",
+                    "FAILED",
+                    "ERROR",
+                    "DECLINED",
+                    "APPROVED"
+                ]
 
-            # ======================================
-            # FILTER
-            # ======================================
+                verified = any(
+                    x in raw.upper()
+                    for x in final_words
+                )
 
-            if any(
-                x in raw_upper
-                for x in approved_keywords
-            ):
+                # STILL PROCESSING
+                if not verified:
 
-                approved.append(line)
+                    print(
+                        "⏳ WAITING FINAL RESPONSE"
+                    )
 
-                print("\n✅ APPROVED")
+                    time.sleep(2)
 
-            elif any(
-                x in raw_upper
-                for x in declined_keywords
-            ):
+                    continue
 
-                declined.append(line)
+                # ======================================
+                # VERIFIED
+                # ======================================
 
-                print("\n❌ DECLINED")
+                checked += 1
 
-            else:
+                raw_upper = raw.upper()
 
-                unknown.append(line)
+                print("✅ VERIFIED")
 
-                print("\n⚠ UNKNOWN")
+                # ======================================
+                # FILTER
+                # ======================================
 
-            print(f"\n⏱ {end}s")
+                if any(
+                    x in raw_upper
+                    for x in success_keywords
+                ):
 
-            # ======================================
-            # LIVE SAVE
-            # ======================================
+                    success.append(
+                        f"{line}\n{raw}\n"
+                    )
 
-            with open("approved.txt", "w") as f:
-                f.write("\n".join(approved))
+                    print("✅ SUCCESS")
 
-            with open("declined.txt", "w") as f:
-                f.write("\n".join(declined))
+                elif any(
+                    x in raw_upper
+                    for x in error_keywords
+                ):
 
-            with open("unknown.txt", "w") as f:
-                f.write("\n".join(unknown))
+                    errors.append(
+                        f"{line}\n{raw}\n"
+                    )
 
-            # ======================================
-            # LIVE TELEGRAM UPDATE
-            # ======================================
+                    print("❌ ERROR")
 
-            if checked % 3 == 0:
+                else:
 
-                await status_msg.edit_text(
-                    f"""
-⚡ PROCESSING
+                    unknown.append(
+                        f"{line}\n{raw}\n"
+                    )
+
+                    print("⚠ UNKNOWN")
+
+                # ======================================
+                # LIVE SAVE
+                # ======================================
+
+                with open(
+                    "success.txt",
+                    "w",
+                    encoding="utf-8"
+                ) as f:
+
+                    f.write(
+                        "\n".join(success)
+                    )
+
+                with open(
+                    "errors.txt",
+                    "w",
+                    encoding="utf-8"
+                ) as f:
+
+                    f.write(
+                        "\n".join(errors)
+                    )
+
+                with open(
+                    "unknown.txt",
+                    "w",
+                    encoding="utf-8"
+                ) as f:
+
+                    f.write(
+                        "\n".join(unknown)
+                    )
+
+                # ======================================
+                # LIVE TELEGRAM UPDATE
+                # ======================================
+
+                if checked % 3 == 0:
+
+                    await status_msg.edit_text(
+                        f"""
+⚡ DEMO API WORKFLOW
 
 📄 Total:
 {total}
 
-✅ Approved:
-{len(approved)}
+✅ Success:
+{len(success)}
 
-❌ Declined:
-{len(declined)}
+❌ Errors:
+{len(errors)}
 
 ⚠ Unknown:
 {len(unknown)}
@@ -309,35 +362,42 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🔄 Checked:
 {checked}/{total}
 """
+                    )
+
+                print(
+                    f"⏱ TIME -> {end}s"
                 )
 
-        except Exception as e:
+                finished = True
 
-            print("\nERROR:")
-            print(e)
+            except Exception as e:
+
+                print("\n❌ ERROR:")
+                print(e)
+
+                time.sleep(2)
 
     # ======================================
     # FINAL
     # ======================================
 
     total_time = round(
-        time.time() - start_time,
+        time.time() - start_all,
         2
     )
 
-    final_text = f"""
-╔══════════════════╗
-      ⚡ COMPLETED
-╚══════════════════╝
+    await status_msg.edit_text(
+        f"""
+⚡ COMPLETED
 
 📄 Total:
 {total}
 
-✅ Approved:
-{len(approved)}
+✅ Success:
+{len(success)}
 
-❌ Declined:
-{len(declined)}
+❌ Errors:
+{len(errors)}
 
 ⚠ Unknown:
 {len(unknown)}
@@ -348,31 +408,42 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⏱ Time:
 {total_time}s
 """
-
-    await status_msg.edit_text(final_text)
+    )
 
     # ======================================
     # SEND FILES
     # ======================================
 
-    if approved:
+    if success:
 
         await update.message.reply_document(
-            document=open("approved.txt", "rb"),
-            filename="approved.txt"
+            document=open(
+                "success.txt",
+                "rb"
+            ),
+
+            filename="success.txt"
         )
 
-    if declined:
+    if errors:
 
         await update.message.reply_document(
-            document=open("declined.txt", "rb"),
-            filename="declined.txt"
+            document=open(
+                "errors.txt",
+                "rb"
+            ),
+
+            filename="errors.txt"
         )
 
     if unknown:
 
         await update.message.reply_document(
-            document=open("unknown.txt", "rb"),
+            document=open(
+                "unknown.txt",
+                "rb"
+            ),
+
             filename="unknown.txt"
         )
 
@@ -405,11 +476,11 @@ def main():
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            single_check
+            single_input
         )
     )
 
-    print("🔥 BOT RUNNING ON RAILWAY")
+    print("🔥 DEMO API BOT RUNNING")
 
     app.run_polling()
 
