@@ -14,29 +14,28 @@ from telegram.ext import (
 )
 
 import requests
-import asyncio
 import os
 import time
 
-# ====================================
+# ==========================================
 # CONFIG
-# ====================================
+# ==========================================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 API_URL = "https://api-of-naone-1.onrender.com/bot/check"
 
-# ====================================
+# ==========================================
 # START COMMAND
-# ====================================
+# ==========================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
             InlineKeyboardButton(
-                "🔥 STATUS",
-                callback_data="status"
+                "🔥 ONLINE",
+                callback_data="online"
             ),
 
             InlineKeyboardButton(
@@ -50,14 +49,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = """
 ╔════════════════════╗
-      ⚡ PREMIUM BOT
+      ⚡ PREMIUM API BOT
 ╚════════════════════╝
 
 📂 Send TXT File
-📝 Or Send Single Input
+📝 Or Send Single Line
 
-⚡ Railway Hosted
-🔥 Ultra Fast
+⚡ Optimized Logic
+🔥 Real Counting
+✅ No Fake Declines
 """
 
     await update.message.reply_text(
@@ -65,9 +65,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# ====================================
+# ==========================================
 # SINGLE CHECK
-# ====================================
+# ==========================================
 
 async def single_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -87,33 +87,52 @@ async def single_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         r = requests.get(
             API_URL,
             params=params,
-            timeout=30
+            timeout=40
         )
 
         data = r.json()
 
-        status = data.get("status", "UNKNOWN")
-        response = data.get("response", "NONE")
-        gate = data.get("gate", "pp")
-        brand = data.get("brand", "UNKNOWN")
-        taken = data.get("time", "0")
+        status = str(
+            data.get("status", "UNKNOWN")
+        )
 
-        emoji = "✅" if status == "APPROVED" else "❌"
+        response_text = str(
+            data.get("response", "NONE")
+        )
+
+        brand = str(
+            data.get("brand", "UNKNOWN")
+        )
+
+        gate = str(
+            data.get("gate", "pp")
+        )
+
+        taken = str(
+            data.get("time", "0")
+        )
 
         result = f"""
 ╔════════════════╗
-     {emoji} {status}
+      ⚡ RESULT
 ╚════════════════╝
 
 💳 {text}
 
-🏦 Brand: {brand}
-⚡ Gate: {gate}
+📌 Status:
+{status}
 
-📌 Response:
-{response}
+🏦 Brand:
+{brand}
 
-⏱ Time: {taken}s
+⚡ Gate:
+{gate}
+
+📨 Response:
+{response_text}
+
+⏱ Time:
+{taken}s
 """
 
         await msg.edit_text(result)
@@ -121,12 +140,16 @@ async def single_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
 
         await msg.edit_text(
-            f"❌ Error:\n{e}"
+            f"""
+❌ ERROR
+
+{e}
+"""
         )
 
-# ====================================
+# ==========================================
 # TXT CHECKER
-# ====================================
+# ==========================================
 
 async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -135,12 +158,13 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not document.file_name.endswith(".txt"):
 
         await update.message.reply_text(
-            "❌ TXT only."
+            "❌ Send TXT file only."
         )
+
         return
 
     status_msg = await update.message.reply_text(
-        "📥 Downloading File..."
+        "📥 Downloading TXT..."
     )
 
     file = await context.bot.get_file(
@@ -151,7 +175,12 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await file.download_to_drive(path)
 
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+    with open(
+        path,
+        "r",
+        encoding="utf-8",
+        errors="ignore"
+    ) as f:
 
         lines = [
             x.strip()
@@ -161,18 +190,17 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     total = len(lines)
 
-    approved = []
-    declined = []
-
     checked = 0
 
-    start_time = time.time()
+    success = []
+    failed = []
+    errors = []
 
     session = requests.Session()
 
-    for line in lines:
+    start_time = time.time()
 
-        checked += 1
+    for line in lines:
 
         try:
 
@@ -184,56 +212,112 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
             r = session.get(
                 API_URL,
                 params=params,
-                timeout=30
+                timeout=40
             )
 
             data = r.json()
 
-            status = data.get(
-                "status",
-                "DECLINED"
+            checked += 1
+
+            status = str(
+                data.get("status", "UNKNOWN")
+            ).upper()
+
+            response_text = str(
+                data.get("response", "NONE")
+            ).upper()
+
+            combined = (
+                status + " " + response_text
             )
 
-            if status == "APPROVED":
+            positive_keywords = [
+                "APPROVED",
+                "LIVE",
+                "SUCCESS",
+                "VALID",
+                "PASS"
+            ]
 
-                approved.append(line)
+            is_success = any(
+                word in combined
+                for word in positive_keywords
+            )
+
+            if is_success:
+
+                success.append(
+                    f"{line} | {status}"
+                )
 
             else:
 
-                declined.append(line)
+                failed.append(
+                    f"{line} | {status}"
+                )
 
-        except:
+        except Exception as e:
 
-            declined.append(line)
+            errors.append(
+                f"{line} -> {e}"
+            )
 
+            continue
+
+        # ==========================
         # LIVE UPDATE
-        if checked % 5 == 0:
+        # ==========================
+
+        if checked % 3 == 0:
 
             await status_msg.edit_text(
                 f"""
 ⚡ PROCESSING FILE...
 
-📄 Total: {total}
+📄 Total:
+{total}
 
-✅ Approved: {len(approved)}
-❌ Declined: {len(declined)}
+✅ Success:
+{len(success)}
+
+❌ Failed:
+{len(failed)}
+
+⚠ Errors:
+{len(errors)}
 
 🔄 Checked:
 {checked}/{total}
 """
             )
 
-    # ====================================
-    # SAVE RESULTS
-    # ====================================
+    # ==========================================
+    # SAVE FILES
+    # ==========================================
 
-    with open("approved.txt", "w") as f:
+    with open(
+        "success.txt",
+        "w",
+        encoding="utf-8"
+    ) as f:
 
-        f.write("\n".join(approved))
+        f.write("\n".join(success))
 
-    with open("declined.txt", "w") as f:
+    with open(
+        "failed.txt",
+        "w",
+        encoding="utf-8"
+    ) as f:
 
-        f.write("\n".join(declined))
+        f.write("\n".join(failed))
+
+    with open(
+        "errors.txt",
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write("\n".join(errors))
 
     end_time = round(
         time.time() - start_time,
@@ -242,54 +326,95 @@ async def txt_checker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     final_text = f"""
 ╔══════════════════╗
-    ⚡ COMPLETED
+     ⚡ COMPLETED
 ╚══════════════════╝
 
-📄 Total: {total}
+📄 Total:
+{total}
 
-✅ Approved:
-{len(approved)}
+✅ Success:
+{len(success)}
 
-❌ Declined:
-{len(declined)}
+❌ Failed:
+{len(failed)}
+
+⚠ Errors:
+{len(errors)}
+
+🔄 Checked:
+{checked}/{total}
 
 ⏱ Time:
 {end_time}s
 """
 
-    await status_msg.edit_text(final_text)
+    await status_msg.edit_text(
+        final_text
+    )
 
+    # ==========================================
     # SEND FILES
+    # ==========================================
 
-    if approved:
-
-        await update.message.reply_document(
-            document=open("approved.txt", "rb"),
-            filename="approved.txt",
-            caption="✅ Approved"
-        )
-
-    if declined:
+    if success:
 
         await update.message.reply_document(
-            document=open("declined.txt", "rb"),
-            filename="declined.txt",
-            caption="❌ Declined"
+            document=open(
+                "success.txt",
+                "rb"
+            ),
+
+            filename="success.txt",
+
+            caption="✅ Success Results"
         )
 
+    if failed:
+
+        await update.message.reply_document(
+            document=open(
+                "failed.txt",
+                "rb"
+            ),
+
+            filename="failed.txt",
+
+            caption="❌ Failed Results"
+        )
+
+    if errors:
+
+        await update.message.reply_document(
+            document=open(
+                "errors.txt",
+                "rb"
+            ),
+
+            filename="errors.txt",
+
+            caption="⚠ Error Logs"
+        )
+
+    # ==========================================
     # CLEANUP
+    # ==========================================
+
+    session.close()
 
     os.remove(path)
 
-    if os.path.exists("approved.txt"):
-        os.remove("approved.txt")
+    if os.path.exists("success.txt"):
+        os.remove("success.txt")
 
-    if os.path.exists("declined.txt"):
-        os.remove("declined.txt")
+    if os.path.exists("failed.txt"):
+        os.remove("failed.txt")
 
-# ====================================
+    if os.path.exists("errors.txt"):
+        os.remove("errors.txt")
+
+# ==========================================
 # MAIN
-# ====================================
+# ==========================================
 
 def main():
 
@@ -300,7 +425,10 @@ def main():
     )
 
     app.add_handler(
-        CommandHandler("start", start)
+        CommandHandler(
+            "start",
+            start
+        )
     )
 
     app.add_handler(
@@ -317,11 +445,11 @@ def main():
         )
     )
 
-    print("🔥 BOT RUNNING ON RAILWAY")
+    print("🔥 BOT RUNNING")
 
     app.run_polling()
 
-# ====================================
+# ==========================================
 
 if __name__ == "__main__":
     main()
